@@ -146,6 +146,8 @@ def main():
     argparser.add_argument("exp_folder", help="Experiment folder")
     argparser.add_argument("data", help="Prediction data")
     argparser.add_argument("dest", help="Write predictions in")
+
+    #  optional params
     argparser.add_argument("--word_rep",
                            help="Text file containing pre-trained "
                            "word representations.")
@@ -167,7 +169,7 @@ def main():
     with open(config_filepath) as f:
         config = yaml.load(f)
 
-    checkpoint = try_to_resume(args.exp_folder)
+    checkpoint = try_to_resume(args.exp_folder)  # load checkpoint
 
     if checkpoint:
         model, id_to_token, id_to_char, data = reload_state(
@@ -178,20 +180,29 @@ def main():
 
     if torch.cuda.is_available() and args.cuda:
         data.tensor_type = torch.cuda.LongTensor
+
     qid2candidate = {}
     for qid, toks, start, end in predict(model, data):
-        toks = regex_multi_space.sub(' ', regex_drop_char.sub(' ', ' '.join(id_to_token[tok] for tok in toks).lower())).strip()
-        #print(repr(qid), repr(toks), start, end, file=f_o)
-        output = '{\"query_id\": '+ qid + ',\"answers\":[ \"' + toks + '\"]}'
+        """
+        toks: tensor([23, 8748, 900, 89, 20947, 40050, 3, 10703, 1128, 12, 13466, 18])
+        """
+        toks = regex_multi_space.sub(' ', regex_drop_char.sub(' ', ' '.join(id_to_token[int(tok)] for tok in toks).lower())).strip()
+        # print(repr(qid), repr(toks), start, end, file=f_o)
+        output = '{\"query_id\": ' + qid + ',\"answers\":[ \"' + toks + '\"]}'
         if qid not in qid2candidate:
             qid2candidate[qid] = []
         qid2candidate[qid].append(json.dumps(json.loads(output)))
+
     with open(args.dest, 'w') as f_o:
         for qid in qid2candidate:
-            #For our leaderboard model we build another model that predicted which passage would be most likley to produce the output. for simplicity we just pick one at random.
-            pick = random.randint(0,len(qid2candidate[qid])-1)
+            """
+            For our leaderboard model we build another model that predicted which passage would 
+            be most likley to produce the output. for simplicity we just pick one at random.
+            """
+            pick = random.randint(0, len(qid2candidate[qid])-1)
             f_o.write(qid2candidate[qid][pick])
             f_o.write('\n')
+
     return
 
 

@@ -51,7 +51,7 @@ def _organize(flat, span_only, answered_only):
 
     organized = []
 
-    for qid, passages, query, answers in flat:
+    for qid, passages, query, answers in flat:  # for one sample
         if answers is None and not answered_only:
             filtered_out.add(qid)
             continue  # Skip non-answered queries
@@ -113,18 +113,26 @@ def tokenize_data(data, token_to_id, char_to_id, limit=None):
             rich_tokenize(passage['passage_text'],
                           token_to_id, char_to_id, update=True)
 
+        """Convert char position to token position."""
         if start == 0 and stop == 0:
             pass  # No answer; nop, since 0 == 0
         elif start == 0 and stop == len(passage):
             stop = len(p_tokens)  # Now point to just after last token.
         else:
-            t_start = None
+            t_start = None  # token idx
             t_end = len(p_tokens)
             for t_ind, (_start, _end) in enumerate(mapping):
-                if start < _end:
+                if start < _end:  # char idx
                     t_start = t_ind
                     break
             assert t_start is not None
+            """
+            >>> for idx,(i,j) in enumerate(np.array([[1,2],[3,4]]), 6):
+            ...     print(idx, i, j)
+            ... 
+            6 1 2
+            7 3 4
+            """
             for t_ind, (_start, _end) in \
                     enumerate(mapping[t_start:], t_start):
                 if stop < _start:

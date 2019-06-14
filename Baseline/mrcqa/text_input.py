@@ -4,19 +4,21 @@ from nltk import sent_tokenize, word_tokenize
 
 
 def rich_tokenize(text, vocab, c_vocab, update):
+    """Sentence tokenize --> Word tokenize --> Replace specific char"""
     tokens = list(
         itertools.chain.from_iterable(
             (token.replace("''", '"').replace("``", '"')
              for token in word_tokenize(sent))
             for sent in sent_tokenize(text)))
+
     length = len(tokens)
-    mapping = np.zeros((length, 2), dtype='int32')
-    c_lengths = np.zeros(length, dtype='int32')
+    mapping = np.zeros((length, 2), dtype='int32')  # store start and end char position of token in the whole text
+    c_lengths = np.zeros(length, dtype='int32')  # store token length
     start = 0
     for ind, token in enumerate(tokens):
-        _start = text.find(token, start)
+        _start = text.find(token, start)  # find from text[start:]
         t_l = len(token)
-        if _start < 0 and token[0] == '"':
+        if _start < 0 and token[0] == '"':  # line 10, we have replaced the specific char, so ...
             t_l = 2
             _a = text.find("''"+token[1:], start)
             _b = text.find("``"+token[1:], start)
@@ -26,6 +28,7 @@ def rich_tokenize(text, vocab, c_vocab, update):
                 _start = _a
             else:
                 _start = _b
+
         start = _start
         assert start >= 0
         mapping[ind, 0] = start
@@ -34,6 +37,9 @@ def rich_tokenize(text, vocab, c_vocab, update):
         start = start + t_l
 
     if update:
+        """setdefault(): Return first matching header value for 'name', or 'value'.
+        compare to get(), the former update the dict.
+        """
         character_ids = [
             [c_vocab.setdefault(c, len(c_vocab)) for c in token]
             for token in tokens]
