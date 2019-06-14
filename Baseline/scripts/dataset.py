@@ -134,7 +134,7 @@ def tokenize_data(data, token_to_id, char_to_id, limit=None):
             7 3 4
             """
             for t_ind, (_start, _end) in \
-                    enumerate(mapping[t_start:], t_start):
+                    enumerate(mapping[t_start:], t_start):  # do so to ensure t_start < t_end.
                 if stop < _start:
                     t_end = t_ind
                     break
@@ -142,16 +142,16 @@ def tokenize_data(data, token_to_id, char_to_id, limit=None):
             stop = t_end  # Now point to after the last token in answer.
 
         # Keep or not based on length of passage.
-        if limit is not None and len(p_tokens) > limit:
+        if limit is not None and len(p_tokens) > limit:  # limit=None (default)
             if stop <= limit:
-                # Passage is too long, but it can be trimmed.
+                # Passage is too long, but it can be trimmed, because the answer end position is in limited length.
                 p_tokens = p_tokens[:limit]
             else:
                 # Passage is too long, but it cannot be trimmed.
                 continue
 
         tokenized.append(
-            (qid,
+            (qid,  # query id
              (p_tokens, p_chars),
              (q_tokens, q_chars),
              (start, stop),
@@ -326,17 +326,71 @@ class EpochGen(object):
     def process_batch_for_length(self, sequences, c_sequences):
         """
         Assemble and pad data.
+
+        sequences: (for one batch)
+            [[token1, token2, ...], ...]
+        c_sequences: (for one batch)
+            [[[char1, char2, ...], [char1, char2, ...], ...], ...]
+                    token1              token2
+        lengths:
+            [token_nums1. token_nums2, ...]
+                seq1        seq2
         """
         assert len(sequences) == len(c_sequences)
-        lengths = Variable(self.tensor_type([len(seq) for seq in sequences]))
-        max_length = max(len(seq) for seq in sequences)
-        max_c_length = max(max(len(chars) for chars in seq)
+        lengths = Variable(self.tensor_type([len(seq) for seq in sequences]))  # seq is [token1, token2, ...]
+        max_length = max(len(seq) for seq in sequences)  # max length for seq
+        max_c_length = max(max(len(chars) for chars in seq)  # chars is [char1, char2, ...]
                            for seq in c_sequences)
 
         def _padded(seq, max_length):
             _padded_seq = self.tensor_type(max_length).zero_()
             _padded_seq[:len(seq)] = self.tensor_type(seq)
             return _padded_seq
+        """For torch.stack()
+        
+        >>> a=torch.Tensor([1,2,3])
+        >>> b=torch.Tensor([4,5,6])
+        >>> torch.stack((a,b))
+        tensor([[1., 2., 3.],
+                [4., 5., 6.]])
+        >>> torch.stack((a,b),0)
+        tensor([[1., 2., 3.],
+                [4., 5., 6.]])
+        >>> torch.stack((a,b),1)
+        tensor([[1., 4.],
+                [2., 5.],
+                [3., 6.]])
+        
+        --------------
+        >>> a=torch.Tensor([[1,2,3],[4,5,6]])
+        >>> b=torch.Tensor([[11,22,33],[44,55,66]])
+        >>> torch.stack((a,b))
+        tensor([[[ 1.,  2.,  3.],
+                 [ 4.,  5.,  6.]],
+        
+                [[11., 22., 33.],
+                 [44., 55., 66.]]])
+        >>> torch.stack((a,b),0)
+        tensor([[[ 1.,  2.,  3.],
+                 [ 4.,  5.,  6.]],
+        
+                [[11., 22., 33.],
+                 [44., 55., 66.]]])
+        >>> torch.stack((a,b),1)
+        tensor([[[ 1.,  2.,  3.],
+                 [11., 22., 33.]],
+        
+                [[ 4.,  5.,  6.],
+                 [44., 55., 66.]]])
+        >>> torch.stack((a,b),2)
+        tensor([[[ 1., 11.],
+                 [ 2., 22.],
+                 [ 3., 33.]],
+        
+                [[ 4., 44.],
+                 [ 5., 55.],
+                 [ 6., 66.]]])
+        """
         sequences = Variable(torch.stack(
                 [_padded(seq, max_length) for seq in sequences]))
 
@@ -353,6 +407,7 @@ class EpochGen(object):
         return (sequences, c_sequences, lengths)
 
     def __len__(self):
+        """The nums of batch"""
         return (self.n_samples + self.batch_size - 1)//self.batch_size
 
     def __iter__(self):
@@ -362,20 +417,32 @@ class EpochGen(object):
         """
 
         if self.shuffle:
-            np.random.shuffle(self.idx)
+            np.random.shuffle(self.idx)  # idx is the identifier of samples
 
         for start_ind in range(0, self.n_samples - 1, self.batch_size):
             batch_idx = self.idx[start_ind:start_ind+self.batch_size]
 
+            """data=[
+                        (
+                            qid,
+                            (p_tokens, p_chars),
+                            (q_tokens, q_chars),
+                            (start, stop),
+                            mapping
+                        ),
+                        ......
+                    ]
+            """
             qids = [self.data[ind][0] for ind in batch_idx]
             passages = [self.data[ind][1][0] for ind in batch_idx]
             c_passages = [self.data[ind][1][1] for ind in batch_idx]
             queries = [self.data[ind][2][0] for ind in batch_idx]
             c_queries = [self.data[ind][2][1] for ind in batch_idx]
-            answers = [self.data[ind][3] for ind in batch_idx]
+            answers = [self.data[ind][3] for ind in batch_idx]  # start and end position
             mappings = [self.data[ind][4] for ind in batch_idx]
 
-            passages = self.process_batch_for_length(
+            """return: (sequences, c_sequences, lengths)"""
+            passages = self.process_batch_for_length(  # for one batch, padding
                     passages, c_passages)
             queries = self.process_batch_for_length(
                     queries, c_queries)

@@ -46,7 +46,7 @@ def reload_state(checkpoint, config, args):
 
     with open(args.data) as f_o:
         data, _ = load_data(json.load(f_o), span_only=True, answered_only=True)
-    data = tokenize_data(data, token_to_id, char_to_id)
+    data = tokenize_data(data, token_to_id, char_to_id)  # tokenize and convert answer char position to token position
 
     id_to_token = {id_: tok for tok, id_ in token_to_id.items()}
     id_to_char = {id_: char for char, id_ in char_to_id.items()}
@@ -114,7 +114,7 @@ def reload_state(checkpoint, config, args):
 def get_loader(data, args):
     data = EpochGen(
         data,
-        batch_size=args.batch_size,
+        batch_size=args.batch_size,  # predict batch size, default=64
         shuffle=False)
     return data
 
